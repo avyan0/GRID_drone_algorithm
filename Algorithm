@@ -1,0 +1,62 @@
+import airgen
+
+# Define the exact target position using Vector3r (can customize target location)
+target_position = airgen.Vector3r(83.34359741210938, -4.080960479768692e-06, -24.09760093688965)
+
+# Function to calculate the distance between the drone's position and the target position
+def calculate_distance(drone_position, target_position):
+    return ((drone_position.x_val - target_position.x_val) ** 2 +
+            (drone_position.y_val - target_position.y_val) ** 2 +
+            (drone_position.z_val - target_position.z_val) ** 2) ** 0.5
+
+# Function to calculate a point deduction based on the drone's landing speed
+def calculate_speed_penalty(drone_velocity):
+    # Customize the SPEED_SCALING factor and max penalty based on personal preference
+    speed = (drone_velocity.x_val ** 2 +
+             drone_velocity.y_val ** 2 +
+             drone_velocity.z_val ** 2) ** 0.5
+    return min(speed * SPEED_SCALING, MAX_POINTS)
+
+# Function to calculate the penalty if the drone lands at an angle (not flat)
+def calculate_landing_angle_penalty(drone_orientation):
+    # Customize the ideal landing orientation or how angle penalties are scaled
+    flat_orientation = airgen.Quaternionr(0, 0, 0, 1)  # Customize for a different orientation if prefered
+    angle_difference = abs(drone_orientation.w_val - flat_orientation.w_val)
+    # Modify the scaling factor for angle penalty based on needs
+    return angle_difference * 1000
+
+# Main function to check the landing performance and calculate the final score
+def check_landing(drone, target_position):
+    # get the current position, velocity, and orientation of the drone
+    drone_state = drone.client.getMultirotorState()
+    drone_position = drone_state.kinematics_estimated.position
+    drone_velocity = drone_state.kinematics_estimated.linear_velocity
+    drone_orientation = drone_state.kinematics_estimated.orientation
+
+    # Check if the drone is near the ground(customize ground threshold if needed)
+    if drone_position.z_val <= 0.1:
+        distance = calculate_distance(drone_position, target_position)
+        # Customize the margin of error for a perfect landing
+        if distance <= MARGIN_OF_ERROR:
+            print("You landed perfectly and were awarded maximum points!")
+            return True, MAX_POINTS
+
+        # Customize the scaling factors and formulas for each penalty
+        distance_penalty = (distance - MARGIN_OF_ERROR) ** 2 * DISTANCE_SCALING  # Exponential penalty for distance
+        speed_penalty = calculate_speed_penalty(drone_velocity)
+        angle_penalty = calculate_landing_angle_penalty(drone_orientation)
+
+        total_penalty = distance_penalty + speed_penalty + angle_penalty
+
+        # Ensure a minimum score of zero
+        points = max(0, MAX_POINTS - total_penalty)
+        return True, round(points)
+    else:
+        return False, 0  # No points if the drone hasn't landed
+
+# Example usage
+landed, points = check_landing(airgen_drone_0, target_position)
+if landed:
+    print(f"Drone landed on target! Points awarded: {points}")
+else:
+    print("Drone did not land on the target.")
